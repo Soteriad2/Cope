@@ -1,9 +1,11 @@
 //Class Items ()
 dimwishlist:item=266021826&perks=1476923953,1476923956 
 dimwishlist:item=2273643087&perks=1476923953,1476923956 
-dimwishlist:item=2273643087&perks=1476923952,1476923956
-dimwishlist:item=2809120022&perks=3751917996,3751917992
-dimwishlist:item=2273643087&perks=1476923953,1476923955
+dimwishlist:item=2273643087&perks=1476923952,1476923956 
+dimwishlist:item=2273643087&perks=1476923953,1476923955 
+dimwishlist:item=2273643087&perks=183430252,1476923955
+dimwishlist:item=2809120022&perks=3751917996,3751917992 
+dimwishlist:item=2809120022&perks=1476923953,3751917994 
 
 
 To add Class Items Copy ONLY the Above into the Cope List file.
@@ -13,5 +15,7 @@ Underneath is an Explanation of all the Class Items. Try to always keep it up to
 dimwishlist:item=266021826&perks=1476923953,1476923956 <-- Titan Hoil + Syntho
 dimwishlist:item=2273643087&perks=1476923953,1476923956 <-- Warlock Hoil + Syntho
 dimwishlist:item=2273643087&perks=1476923952,1476923956 <-- Warlock Assassin + Syntho
-dimwishlist:item=2809120022&perks=3751917996,3751917992 <-- Hunter Caliban + Liar
 dimwishlist:item=2273643087&perks=1476923953,1476923955 <-- Warlock Hoil + Star-Eater
+dimwishlist:item=2273643087&perks=183430252,1476923955  <-- Warlock Necrotic + Star-Eater
+dimwishlist:item=2809120022&perks=3751917996,3751917992 <-- Hunter Caliban + Liar
+dimwishlist:item=2809120022&perks=1476923953,3751917994 <-- Hunter Hoil + Cyrtarachne

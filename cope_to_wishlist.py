@@ -1,4 +1,4 @@
-from pandas import DataFrame, to_numeric
+from pandas import DataFrame
 
 def get_item_definition_manifest():
     from requests import get
@@ -34,23 +34,23 @@ def get_plug_set_definition_manifest():
     return plug_set_definition_manifest
     #return get(full_items_url).json()
 
-def import_gsheet(sheet_id:str, sheet_name:str, sheet_page:str)-> DataFrame:
+def import_gsheet(sheet_id:str, sheet_page:str)-> DataFrame:
     from pandas import read_csv
-    return read_csv(f'https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name+sheet_page}')
+    return read_csv(f'https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&id={sheet_id}&gid={sheet_page}')
 
-def get_weapon_ids(item_definition_manifest, weapons:list[str])->DataFrame:
-    weapon_names = []
-    weapon_ids = []
+def get_item_ids(item_definition_manifest, item_names:list[str], item_category:int)->DataFrame:
+    item_definition_names = []
+    item_ids = []
     for item_id, item_data in item_definition_manifest.items():
-        if 1 in item_data.get('itemCategoryHashes', {}) and not 3109687656 in item_data.get('itemCategoryHashes', {}):
-            weapon_name = item_data.get('displayProperties', {}).get('name')
-            if '(' in weapon_name:
-                seperator = weapon_name.find(" (")
-                weapon_name = weapon_name[:seperator]
-            if weapon_name in weapons:
-                weapon_names.append(weapon_name)
-                weapon_ids.append(item_id)
-    return DataFrame({'Name':weapon_names, 'Id':weapon_ids}).astype(str)
+        if item_category in item_data.get('itemCategoryHashes', {}) and not 3109687656 in item_data.get('itemCategoryHashes', {}):
+            item_name = item_data.get('displayProperties', {}).get('name').replace('û','u')
+            if '(' in item_name:
+                seperator = item_name.find(" (")
+                item_name = item_name[:seperator]
+            if item_name in item_names:
+                item_definition_names.append(item_name)
+                item_ids.append(item_id)
+    return DataFrame({'Name':item_definition_names, 'Id':item_ids}).astype(str)
 
 def get_weapon_perks(item_definition_manifest, plug_set_definition_manifest, weapon_ids:list[str])->dict[str:list[str]]:
     weapon_perks = {}
@@ -101,7 +101,7 @@ def get_weapon_rolls(weapons:DataFrame) -> list[DataFrame]:
     weapon_rolls.append(DataFrame.from_records(temp_roll, columns=weapons.columns))
     return weapon_rolls
 
-def add_ids_to_weapon_roll(weapon_roll:DataFrame, weapon_ids:DataFrame, weapon_perks:dict[str:list[str]], perk_ids:DataFrame)->dict:
+def add_ids_to_weapon_roll(weapon_roll:DataFrame, weapon_ids:DataFrame, weapon_perks:dict[str:list[str]], perk_ids:DataFrame, imporportant_perk_cols:list[str])->dict:
     from pandas import concat
     weapon_ids = weapon_ids[weapon_ids['Name']==weapon_roll['Name'][0]]
     perk_cols = []
@@ -135,16 +135,22 @@ def add_ids_to_weapon_roll(weapon_roll:DataFrame, weapon_ids:DataFrame, weapon_p
             leftover_perks = weapon_perks_roll[weapon_perks_roll[col].isin(possible_weapon_perks)][col]
             for leftover in leftover_perks:
                 weapon_perk_ids.replace(leftover, '-')
-        if not (weapon_perks_roll['Perk 3'].unique()[0]=='-' or weapon_perks_roll['Perk 4'].unique()[0]=='-'):
+        is_possible = True
+        for col in imporportant_perk_cols:
+            is_possible = is_possible and not weapon_perks_roll[weapon_perks_roll[col]!='-'].empty
+        #if not (weapon_perks_roll['Perk 3'].unique()[0]=='-' or weapon_perks_roll['Perk 4'].unique()[0]=='-'):
+        if is_possible:
             if weapon_rolls_with_id['Empty']:
                 for col in weapon_description.columns:
-                    weapon_rolls_with_id[col] = weapon_description[weapon_description[col]!='-'][col].to_list()
+                    weapon_description_col = str(weapon_description[weapon_description[col]!='-'][col].to_list())
+                    weapon_description_col = weapon_description_col.replace('[','').replace(']','').replace("'",'')
+                    weapon_rolls_with_id[col] = weapon_description_col
                     weapon_rolls_with_id['Empty'] = False
             weapon_rolls_with_id['Ids'].append(weapon_id)
             weapon_rolls_with_id[weapon_id] = weapon_perks_roll
     return weapon_rolls_with_id
 
-def mulitply_perks(weapon_roll:DataFrame)->DataFrame:
+def mulitply_weapon_perks(weapon_roll:DataFrame)->DataFrame:
     from itertools import product
     weapon_perks = []
     perk_cols = weapon_roll.columns.to_list()
@@ -156,7 +162,7 @@ def mulitply_perks(weapon_roll:DataFrame)->DataFrame:
     weapon_roll = DataFrame(list(product(*weapon_perks)), columns=perk_cols).drop_duplicates()
     return weapon_roll[perk_cols]
 
-def add_sub_rolls(weapon_roll:dict, cols_to_drop:list[str])->list[dict]:
+def add_weapon_sub_rolls(weapon_roll:dict, cols_to_drop:list[str])->list[dict]:
     all_sub_rolls = []
     cols_dropped = []
     n = 1
@@ -170,14 +176,14 @@ def add_sub_rolls(weapon_roll:dict, cols_to_drop:list[str])->list[dict]:
         all_sub_rolls.append(sub_roll)
     return all_sub_rolls
 
-def to_dim_str(weapon_id:str, weapon_roll:DataFrame)->str:
+def weapon_roll_to_dim_str(weapon_id:str, weapon_roll:DataFrame)->str:
     perk_cols = weapon_roll.columns.to_list()
     weapon_roll = weapon_roll.copy()
     weapon_roll['Id'] = 'dimwishlist:item='+weapon_id+'&perks='
     weapon_str = weapon_roll[['Id']+perk_cols].to_csv(index=False, header=False)
     return weapon_str.replace('=,','=').replace('-,','')
 
-def to_recipes_str(weapon_id:str, weapon_roll:DataFrame, use_cols:list[str], source:list[str])->str:
+def weapon_roll_to_recipes_str(weapon_id:str, weapon_roll:DataFrame, use_cols:list[str], source:list[str])->str:
     recipes_str = '{"source":"'+str(source).replace('[', '').replace(']', '').replace("'",'').replace('"','').replace("'",'')+'","perks":['
     for col in weapon_roll.columns:
         if col in use_cols and not weapon_roll.empty:
@@ -187,65 +193,95 @@ def to_recipes_str(weapon_id:str, weapon_roll:DataFrame, use_cols:list[str], sou
     recipes_str = recipes_str+'[]],"itemHash":'+weapon_id+'},'
     return recipes_str.replace(' ','')
 
+def add_ids_to_class_items(class_items:DataFrame, class_item_ids:DataFrame, class_item_perk_ids:DataFrame)->DataFrame:
+    perk_cols = class_items.columns.to_series()[class_items.columns.to_series().str.find('Perk')>=0].to_list()
+    class_items_with_ids = class_items.copy()
+    for col in perk_cols:
+        possible_ids = class_item_perk_ids[class_item_perk_ids['Name'].isin(class_items_with_ids[col])]
+        class_items_with_ids = class_items_with_ids.merge(possible_ids, how='left', left_on=col, right_on='Name')
+        class_items_with_ids = class_items_with_ids.drop(columns=[col, 'Name_y'])
+        class_items_with_ids = class_items_with_ids.rename(columns={'Id':col,'Name_x':'Name'})
+    return class_items_with_ids.merge(class_item_ids, on='Name', how='inner')
+
+def class_items_with_ids_to_dim_str(class_items_with_ids:DataFrame)->str:
+    dim_str = '//Exotic Class Items\n'
+    for row in class_items_with_ids.to_records(index=False):
+        dim_str = dim_str+'dimwishlist:item='+row['Id']+'&perks='+row['Perk 1']+','+row['Perk 2']
+        dim_str = dim_str+'#notes:Use-Case:'+row['Use-Case']+', Source: '+row['Source']+' Required: '+row['Required']
+        dim_str = dim_str.replace("'",'')+'\n'
+    return dim_str
+
 #procedure
 sheet_id = '1vJQ7Z-BGwtgbbm_Y7VR2hhlGfDv5FSSwsRMIE8ozBsA'
-sheet_name = 'Cope_List'
-sheet_page = '!Weapons'
+weapons_page = '140599422'
+class_items_page = '64126422'
 
-cope = import_gsheet(sheet_id, sheet_name, sheet_page).drop(columns='Unnamed: 0')
-cope.fillna('-', inplace=True)
-cope = cope.astype(str)
-for col in cope.columns:
-    cope[col] = cope[col].str.replace('\r','').str.replace('\n','')
+cope_weapons = import_gsheet(sheet_id, weapons_page).drop(columns='Unnamed: 0')
+cope_weapons.fillna('-', inplace=True)
+cope_weapons = cope_weapons.astype(str)
+for col in cope_weapons.columns:
+    cope_weapons[col] = cope_weapons[col].str.replace('\r','').str.replace('\n','')
+
+cope_class_items = import_gsheet(sheet_id, class_items_page).drop(columns='Unnamed: 0')
+cope_class_items = cope_class_items.astype(str)
+for col in cope_class_items.columns:
+    cope_class_items[col] = cope_class_items[col].str.replace('\r','').str.replace('\n','')
 
 item_definition_manifest = get_item_definition_manifest()
 plug_set_definition_manifest = get_plug_set_definition_manifest()
 
-weapon_names = cope[cope['Name']!='-']['Name'].unique().tolist()
-weapon_ids = get_weapon_ids(item_definition_manifest, weapon_names)
+weapon_names = cope_weapons[cope_weapons['Name']!='-']['Name'].unique().tolist()
+weapon_ids = get_item_ids(item_definition_manifest, weapon_names, item_category=1)
 weapon_perks = get_weapon_perks(item_definition_manifest, plug_set_definition_manifest, weapon_ids['Id'].to_list())
 raw_perk_ids = list(set(sum(list(weapon_perks.values()), [])))
 perk_ids = get_perk_names(item_definition_manifest, raw_perk_ids)
 
-weapon_rolls = get_weapon_rolls(cope)
+class_item_names = cope_class_items['Name'].unique().tolist()
+class_item_ids = get_item_ids(item_definition_manifest, class_item_names, item_category=20)
+class_item_perk_names = cope_class_items['Perk 1'].unique().tolist()+cope_class_items['Perk 2'].unique().tolist()
+class_item_perk_ids = get_item_ids(item_definition_manifest, class_item_perk_names, item_category=59)
+class_items_with_ids = add_ids_to_class_items(cope_class_items, class_item_ids, class_item_perk_ids)
+class_items_dim_str = class_items_with_ids_to_dim_str(class_items_with_ids)
+
+weapon_rolls = get_weapon_rolls(cope_weapons)
 
 weapon_rolls_with_ids = []
 for weapon_roll in weapon_rolls:
-    weapon_rolls_with_id = add_ids_to_weapon_roll(weapon_roll, weapon_ids, weapon_perks, perk_ids)
+    weapon_rolls_with_id = add_ids_to_weapon_roll(weapon_roll, weapon_ids, weapon_perks, perk_ids, ['Perk 3', 'Perk 4'])
     if not weapon_rolls_with_id['Empty']:
         weapon_rolls_with_ids.append(weapon_rolls_with_id)
 
 for weapon_roll in weapon_rolls_with_ids:
     for weapon_id in weapon_roll['Ids']:
-        weapon_roll[weapon_id] = mulitply_perks(weapon_roll[weapon_id])
-    if weapon_roll['Craftable?'][0]=='No':
-        weapon_rolls_with_ids = weapon_rolls_with_ids+add_sub_rolls(weapon_roll, ['Perk 1','Perk 2'])
+        weapon_roll[weapon_id] = mulitply_weapon_perks(weapon_roll[weapon_id])
+    if weapon_roll['Craftable']=='No':
+        weapon_rolls_with_ids = weapon_rolls_with_ids+add_weapon_sub_rolls(weapon_roll, ['Perk 1','Perk 2'])
 
-dim_wl = ''
+dim_wl = class_items_dim_str+'\n'
 for weapon_roll in weapon_rolls_with_ids:
     for weapon_id in weapon_roll['Ids']:
         roll_str = '//'+str(weapon_roll['Name'])+'\n'
         roll_str = roll_str+'//notes:Masterwork: '+str(weapon_roll['Masterwork'])
         roll_str = roll_str+'; Use-Case: '+str(weapon_roll['Use-Case'])
         roll_str = roll_str+'; Source: '+str(weapon_roll['Source'])
-        roll_str = roll_str+'; Required: '+str(weapon_roll['Required?'])
+        roll_str = roll_str+'; Required: '+str(weapon_roll['Required'])
         if weapon_roll['Sub']>0:
             roll_str = roll_str+'; Substitute: #'+str(weapon_roll['Sub'])
         roll_str = roll_str.replace('[', '').replace(']', '').replace("'",'')
-        roll_str = roll_str+'\n'+to_dim_str(weapon_id, weapon_roll[weapon_id])+'\n'
+        roll_str = roll_str+'\n'+weapon_roll_to_dim_str(weapon_id, weapon_roll[weapon_id])+'\n'
         dim_wl = dim_wl+roll_str
 with open('cope_list_dim.txt', 'w') as f:
     f.write(dim_wl.replace('\r\n','\n'))
 
 farm_list_str = '['
 for weapon_roll in weapon_rolls_with_ids:
-    if weapon_roll['Required?'][0]=='Yes':
+    if weapon_roll['Required']=='Yes':
         if weapon_roll['Sub']==0:
             for weapon_id in weapon_roll['Ids']:
-                if weapon_roll['Craftable?'][0]=='No':
-                    farm_list_str = farm_list_str+to_recipes_str(weapon_id, weapon_roll[weapon_id], ['Perk 3','Perk 4','Perk 5'], weapon_roll['Source'])
+                if weapon_roll['Craftable']=='No':
+                    farm_list_str = farm_list_str+weapon_roll_to_recipes_str(weapon_id, weapon_roll[weapon_id], ['Perk 3','Perk 4','Perk 5'], weapon_roll['Source'])
                 else:
-                    farm_list_str = farm_list_str+to_recipes_str(weapon_id, weapon_roll[weapon_id], weapon_roll[weapon_id].columns, weapon_roll['Source'])
+                    farm_list_str = farm_list_str+weapon_roll_to_recipes_str(weapon_id, weapon_roll[weapon_id], weapon_roll[weapon_id].columns, weapon_roll['Source'])
 farm_list_str = farm_list_str[:-1]+']'
 with open('cope_list_recipes.json', 'w') as f:
     f.write(farm_list_str)

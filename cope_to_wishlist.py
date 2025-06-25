@@ -2,37 +2,37 @@ from pandas import DataFrame
 
 def get_item_definition_manifest():
     from requests import get
-    from json import dump, load
-    #api_key = ''
-    #with open('api.key') as f:
-    #    api_key = f.read()
-    #headers = {'X-API-Key': api_key}
-    #url = 'https://www.bungie.net/Platform/Destiny2/Manifest/'
-    #full_items_url = 'https://www.bungie.net' + get(url, headers=headers).json()['Response']['jsonWorldComponentContentPaths']['en']['DestinyInventoryItemDefinition']
+    #from json import dump, load
+    api_key = ''
+    with open('api.key') as f:
+        api_key = f.read()
+    headers = {'X-API-Key': api_key}
+    url = 'https://www.bungie.net/Platform/Destiny2/Manifest/'
+    full_items_url = 'https://www.bungie.net' + get(url, headers=headers).json()['Response']['jsonWorldComponentContentPaths']['en']['DestinyInventoryItemDefinition']
     #with open('item_definition_manifest.json', 'w') as f:
     #    dump(get(full_items_url).json(), f)
-    item_definition_manifest = None
-    with open('item_definition_manifest.json', 'r') as f:
-        item_definition_manifest = load(f)
-    return item_definition_manifest
-    #return get(full_items_url).json()
+    #item_definition_manifest = None
+    #with open('item_definition_manifest.json', 'r') as f:
+    #    item_definition_manifest = load(f)
+    #return item_definition_manifest
+    return get(full_items_url).json()
 
 def get_plug_set_definition_manifest():
     from requests import get
-    from json import dump, load
-    #api_key = ''
-    #with open('api.key') as f:
-    #    api_key = f.read()
-    #headers = {'X-API-Key': api_key}
-    #url = 'https://www.bungie.net/Platform/Destiny2/Manifest/'
-    #full_plug_set_url = 'https://www.bungie.net' + get(url, headers=headers).json()['Response']['jsonWorldComponentContentPaths']['en']['DestinyPlugSetDefinition']
+    #from json import dump, load
+    api_key = ''
+    with open('api.key') as f:
+        api_key = f.read()
+    headers = {'X-API-Key': api_key}
+    url = 'https://www.bungie.net/Platform/Destiny2/Manifest/'
+    full_plug_set_url = 'https://www.bungie.net' + get(url, headers=headers).json()['Response']['jsonWorldComponentContentPaths']['en']['DestinyPlugSetDefinition']
     #with open('plug_set_definition_manifest.json', 'w') as f:
     #    dump(get(full_plug_set_url).json(), f)
-    plug_set_definition_manifest = None
-    with open('plug_set_definition_manifest.json', 'r') as f:
-        plug_set_definition_manifest = load(f)
-    return plug_set_definition_manifest
-    #return get(full_items_url).json()
+    #plug_set_definition_manifest = None
+    #with open('plug_set_definition_manifest.json', 'r') as f:
+    #    plug_set_definition_manifest = load(f)
+    #return plug_set_definition_manifest
+    return get(full_plug_set_url).json()
 
 def import_gsheet(sheet_id:str, sheet_page:str)-> DataFrame:
     from pandas import read_csv
@@ -138,7 +138,6 @@ def add_ids_to_weapon_roll(weapon_roll:DataFrame, weapon_ids:DataFrame, weapon_p
         is_possible = True
         for col in imporportant_perk_cols:
             is_possible = is_possible and not weapon_perks_roll[weapon_perks_roll[col]!='-'].empty
-        #if not (weapon_perks_roll['Perk 3'].unique()[0]=='-' or weapon_perks_roll['Perk 4'].unique()[0]=='-'):
         if is_possible:
             if weapon_rolls_with_id['Empty']:
                 for col in weapon_description.columns:
@@ -183,15 +182,15 @@ def weapon_roll_to_dim_str(weapon_id:str, weapon_roll:DataFrame)->str:
     weapon_str = weapon_roll[['Id']+perk_cols].to_csv(index=False, header=False)
     return weapon_str.replace('=,','=').replace('-,','')
 
-def weapon_roll_to_recipes_str(weapon_id:str, weapon_roll:DataFrame, use_cols:list[str], source:list[str])->str:
-    recipes_str = '{"source":"'+str(source).replace('[', '').replace(']', '').replace("'",'').replace('"','').replace("'",'')+'","perks":['
+def weapon_roll_to_recipes_str(weapon_id:str, weapon_roll:DataFrame, use_cols:list[str], source:str)->str:
+    recipes_str = '{"source":"'+source.replace('"','')+'","perks":['
     for col in weapon_roll.columns:
         if col in use_cols and not weapon_roll.empty:
             recipes_str = recipes_str+str(weapon_roll[col].drop_duplicates().tolist()).replace("'",'')+','
         else:
             recipes_str = recipes_str+'[],'
     recipes_str = recipes_str+'[]],"itemHash":'+weapon_id+'},'
-    return recipes_str.replace(' ','')
+    return recipes_str
 
 def add_ids_to_class_items(class_items:DataFrame, class_item_ids:DataFrame, class_item_perk_ids:DataFrame)->DataFrame:
     perk_cols = class_items.columns.to_series()[class_items.columns.to_series().str.find('Perk')>=0].to_list()
@@ -254,20 +253,22 @@ for weapon_roll in weapon_rolls:
 for weapon_roll in weapon_rolls_with_ids:
     for weapon_id in weapon_roll['Ids']:
         weapon_roll[weapon_id] = mulitply_weapon_perks(weapon_roll[weapon_id])
-    if weapon_roll['Craftable']=='No':
+    if weapon_roll['Craftable']=='No' and weapon_roll['Name']!='Ergo Sum':
         weapon_rolls_with_ids = weapon_rolls_with_ids+add_weapon_sub_rolls(weapon_roll, ['Perk 1','Perk 2'])
 
 dim_wl = class_items_dim_str+'\n'
 for weapon_roll in weapon_rolls_with_ids:
     for weapon_id in weapon_roll['Ids']:
-        roll_str = '//'+str(weapon_roll['Name'])+'\n'
-        roll_str = roll_str+'//notes:Masterwork: '+str(weapon_roll['Masterwork'])
-        roll_str = roll_str+'; Use-Case: '+str(weapon_roll['Use-Case'])
-        roll_str = roll_str+'; Source: '+str(weapon_roll['Source'])
-        roll_str = roll_str+'; Required: '+str(weapon_roll['Required'])
+        roll_str = '//'+weapon_roll['Name']+'\n//notes:'
+        if weapon_roll['Name']=='Ergo Sum':
+            roll_str = roll_str+'Intrinsic: '+weapon_roll['Intrinsic']+'; '
+            roll_str = roll_str+'Energy: '+weapon_roll['Energy']+'; '
+        roll_str = roll_str+'Masterwork: '+weapon_roll['Masterwork']
+        roll_str = roll_str+'; Use-Case: '+weapon_roll['Use-Case']
+        roll_str = roll_str+'; Source: '+weapon_roll['Source']
+        roll_str = roll_str+'; Required: '+weapon_roll['Required']
         if weapon_roll['Sub']>0:
             roll_str = roll_str+'; Substitute: #'+str(weapon_roll['Sub'])
-        roll_str = roll_str.replace('[', '').replace(']', '').replace("'",'')
         roll_str = roll_str+'\n'+weapon_roll_to_dim_str(weapon_id, weapon_roll[weapon_id])+'\n'
         dim_wl = dim_wl+roll_str
 with open('cope_list_dim.txt', 'w') as f:

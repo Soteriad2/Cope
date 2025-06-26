@@ -271,7 +271,7 @@ for weapon_roll in weapon_rolls_with_ids:
             roll_str = roll_str+'; Substitute: #'+str(weapon_roll['Sub'])
         roll_str = roll_str+'\n'+weapon_roll_to_dim_str(weapon_id, weapon_roll[weapon_id])+'\n'
         dim_wl = dim_wl+roll_str
-with open('cope_list_dim.txt', 'w') as f:
+with open('Cope List', 'w') as f:
     f.write(dim_wl.replace('\r\n','\n'))
 
 farm_list_str = '['
@@ -284,5 +284,5 @@ for weapon_roll in weapon_rolls_with_ids:
                 else:
                     farm_list_str = farm_list_str+weapon_roll_to_recipes_str(weapon_id, weapon_roll[weapon_id], weapon_roll[weapon_id].columns, weapon_roll['Source'])
 farm_list_str = farm_list_str[:-1]+']'
-with open('cope_list_recipes.json', 'w') as f:
+with open('Cope List.json', 'w') as f:
     f.write(farm_list_str)
